@@ -67,6 +67,7 @@ describe("TransactionsDashboard", () => {
     await waitFor(() => {
       expect(within(firstRow).getByText("Success")).toBeInTheDocument()
     })
+    expect(within(firstRow).getByText("Retry recovered")).toBeInTheDocument()
     expect(within(secondRow).getByText("Retrying")).toBeInTheDocument()
 
     await act(async () => {
@@ -79,6 +80,7 @@ describe("TransactionsDashboard", () => {
     await waitFor(() => {
       expect(within(secondRow).getByText("Failed")).toBeInTheDocument()
     })
+    expect(within(secondRow).getByText("Retry failed")).toBeInTheDocument()
   })
 
   it("shows invoice generation state before downloading the dummy PDF", async () => {
@@ -117,6 +119,9 @@ describe("TransactionsDashboard", () => {
         "invoice-INV-2026-0042-TXN-2026-0042.pdf"
       )
     })
+    expect(
+      within(row).getByText("Invoice INV-2026-0042 downloaded")
+    ).toBeInTheDocument()
     expect(downloadButton).toBeEnabled()
   })
 })

@@ -17,7 +17,7 @@ The hiring goal matters as much as the feature list: the implementation should l
 | C5  | Download invoice per row        | Every transaction has a download button                                   |
 | C6  | 2-second PDF generation state   | Per-row `Generating` state before download                                |
 | C7  | Browser download                | Dummy PDF Blob downloaded via object URL                                  |
-| C8  | Download notification           | Sonner success/error toast                                                |
+| C8  | Download notification           | Row-level invoice feedback in the table                                   |
 | C9  | Failed row selection            | Only failed, idle rows render selectable checkboxes                       |
 | C10 | Batch retry                     | `Retry selected` starts all selected retries immediately                  |
 | C11 | Concurrent retry simulation     | Each retry call is fired independently                                    |
@@ -43,7 +43,7 @@ These are deliberate exclusions. They keep the assignment focused on the request
 | Language             | TypeScript                                     | Required by task; reducer/actions are strongly typed                   |
 | UI                   | Tailwind CSS v4 + shadcn/ui preset `b1Z5baiES` | Polished component primitives without custom design-system overhead    |
 | State                | `useReducer`                                   | Retry workflow has real transitions, but no global app state is needed |
-| Notifications        | Sonner via shadcn/ui                           | Lightweight toast feedback for invoice/retry outcomes                  |
+| Inline feedback      | Row-level table messages                       | Keeps invoice/retry responses near the action that caused them         |
 | Unit/component tests | Vitest + React Testing Library                 | Fast deterministic coverage for timers, reducer, and interactions      |
 | E2E                  | Playwright                                     | Verifies the actual browser download and retry flow                    |
 
@@ -53,7 +53,7 @@ The app uses a thin route layer and a focused vertical module.
 
 ```text
 app/
-  layout.tsx                         # Metadata, theme provider, toast host
+  layout.tsx                         # Metadata and theme provider
   page.tsx                           # Server route entry, renders TransactionsPage
   globals.css                        # Tailwind v4 + shadcn preset tokens
 
@@ -69,7 +69,7 @@ modules/transactions-dashboard/
     types.ts                         # Domain constants and contracts
   ui/
     TransactionsPage.tsx             # Server-compatible composition
-    TransactionsDashboard.tsx        # Client island for interactive behavior
+    TransactionsDashboard.tsx        # Client island with table-level action feedback
   index.ts                           # Shared public types/constants
   index.server.ts                    # Server-safe public entry
   index.client.ts                    # Client/test public entry
@@ -128,7 +128,7 @@ Retry selected clicked
        +- status becomes Success or Failed
 ```
 
-The important point is that UI updates are not gated behind `Promise.all`. `Promise.all` is used only for the final summary toast after individual row updates have already happened.
+The important point is that UI updates are not gated behind `Promise.all`. Each row owns its visible result: `Retry recovered` or `Retry failed`.
 
 ## 8. Invoice Flow
 
@@ -143,7 +143,7 @@ Download clicked on row
   |
   +- create object URL + hidden anchor click
   |
-  +- show toast and clear Generating state
+  +- show inline table feedback and clear Generating state
 ```
 
 The PDF is intentionally dummy content but still uses `application/pdf` and includes invoice/transaction details.

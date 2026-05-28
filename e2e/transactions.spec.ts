@@ -22,9 +22,7 @@ test("renders the payment history and downloads an invoice", async ({
   expect(download.suggestedFilename()).toBe(
     "invoice-INV-2026-0042-TXN-2026-0042.pdf"
   )
-  await expect(
-    page.getByText("Invoice INV-2026-0042 downloaded.")
-  ).toBeVisible()
+  await expect(page.getByText("Invoice INV-2026-0042 downloaded")).toBeVisible()
 })
 
 test("retries selected failed payments without blocking the whole table", async ({

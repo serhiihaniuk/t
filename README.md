@@ -13,7 +13,7 @@ I used AI as a pair programmer for scaffolding, test-shape review, and implement
 - Bulk `Retry selected` flow that starts all selected retry requests concurrently.
 - Independent per-row retry loading states; each row updates as its own simulated API call resolves.
 - Random retry delays between 1 and 4 seconds with a 20% simulated failure rate.
-- Per-transaction invoice download with a 2-second generating state, dummy PDF blob, browser download, and toast notification.
+- Per-transaction invoice download with a 2-second generating state, dummy PDF blob, browser download, and row-level feedback.
 
 ## Tech Stack
 
@@ -30,7 +30,7 @@ The app keeps the route surface small and puts the feature under `modules/transa
 ```text
 app/
   page.tsx                         # Server route entry
-  layout.tsx                       # Providers, metadata, toast host
+  layout.tsx                       # Providers and metadata
 
 modules/transactions-dashboard/
   api/get-transactions.ts          # Mock server-side data retrieval

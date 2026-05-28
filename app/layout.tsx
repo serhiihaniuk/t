@@ -3,7 +3,6 @@ import type { Metadata } from "next"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import { Toaster } from "@/components/ui/sonner"
 import { cn } from "@/lib/utils"
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" })
@@ -31,10 +30,7 @@ export default function RootLayout({
       className={cn(fontMono.variable, "font-sans", geist.variable)}
     >
       <body className="antialiased">
-        <ThemeProvider>
-          {children}
-          <Toaster richColors closeButton />
-        </ThemeProvider>
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   )

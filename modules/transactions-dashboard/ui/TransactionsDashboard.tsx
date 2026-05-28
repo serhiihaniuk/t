@@ -2,7 +2,6 @@
 
 import { DownloadIcon, RefreshCwIcon } from "lucide-react"
 import { useMemo, useReducer, useState } from "react"
-import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -47,6 +46,20 @@ import {
 } from "../model/types"
 import { formatMoney, formatTransactionDateTime } from "../model/formatters"
 
+const RETRY_FEEDBACK = {
+  RECOVERED: "recovered",
+  STILL_FAILED: "still-failed",
+} as const
+
+type RetryFeedback = (typeof RETRY_FEEDBACK)[keyof typeof RETRY_FEEDBACK]
+
+const INVOICE_FEEDBACK = {
+  DOWNLOADED: "downloaded",
+  FAILED: "failed",
+} as const
+
+type InvoiceFeedback = (typeof INVOICE_FEEDBACK)[keyof typeof INVOICE_FEEDBACK]
+
 interface TransactionsDashboardProps {
   readonly initialTransactions: readonly Transaction[]
   readonly retryPaymentAction?: RetryPaymentAction
@@ -68,6 +81,12 @@ export function TransactionsDashboard({
   const [generatingInvoiceIds, setGeneratingInvoiceIds] = useState<
     readonly string[]
   >([])
+  const [retryFeedbackById, setRetryFeedbackById] = useState<
+    Readonly<Record<string, RetryFeedback | undefined>>
+  >({})
+  const [invoiceFeedbackById, setInvoiceFeedbackById] = useState<
+    Readonly<Record<string, InvoiceFeedback | undefined>>
+  >({})
 
   const retryableSelectedIds = getRetryableSelectedIds(state)
   const summary = useMemo(
@@ -84,15 +103,18 @@ export function TransactionsDashboard({
     }
 
     dispatch({ transactionIds, type: "retry/started" })
-    toast.info(
-      `Retrying ${transactionIds.length} failed ${
-        transactionIds.length === 1 ? "payment" : "payments"
-      }.`
-    )
+    setRetryFeedbackById((current) => omitKeys(current, transactionIds))
 
-    const retryTasks = transactionIds.map((transactionId) =>
-      retryPaymentAction(transactionId)
+    transactionIds.forEach((transactionId) => {
+      void retryPaymentAction(transactionId)
         .then((result) => {
+          setRetryFeedbackById((current) => ({
+            ...current,
+            [transactionId]:
+              result.status === TRANSACTION_STATUS.SUCCESS
+                ? RETRY_FEEDBACK.RECOVERED
+                : RETRY_FEEDBACK.STILL_FAILED,
+          }))
           dispatch({ result, type: "retry/resolved" })
           return result
         })
@@ -101,27 +123,13 @@ export function TransactionsDashboard({
             status: TRANSACTION_STATUS.FAILED,
             transactionId,
           }
+          setRetryFeedbackById((current) => ({
+            ...current,
+            [transactionId]: RETRY_FEEDBACK.STILL_FAILED,
+          }))
           dispatch({ result, type: "retry/resolved" })
           return result
         })
-    )
-
-    void Promise.all(retryTasks).then((results) => {
-      const recoveredCount = results.filter(
-        (result) => result.status === TRANSACTION_STATUS.SUCCESS
-      ).length
-
-      if (recoveredCount === results.length) {
-        toast.success("All selected payments were recovered.")
-        return
-      }
-
-      if (recoveredCount === 0) {
-        toast.error("All selected retries failed. Try again later.")
-        return
-      }
-
-      toast.info(`${recoveredCount} of ${results.length} payments recovered.`)
     })
   }
 
@@ -129,13 +137,20 @@ export function TransactionsDashboard({
     transaction: Transaction
   ): Promise<void> {
     setGeneratingInvoiceIds((current) => [...current, transaction.id])
+    setInvoiceFeedbackById((current) => omitKeys(current, [transaction.id]))
 
     try {
       const invoice = await generateInvoiceAction(transaction)
       downloadInvoiceAction(invoice, buildInvoiceFileName(transaction))
-      toast.success(`Invoice ${transaction.invoiceNumber} downloaded.`)
+      setInvoiceFeedbackById((current) => ({
+        ...current,
+        [transaction.id]: INVOICE_FEEDBACK.DOWNLOADED,
+      }))
     } catch {
-      toast.error(`Could not download invoice ${transaction.invoiceNumber}.`)
+      setInvoiceFeedbackById((current) => ({
+        ...current,
+        [transaction.id]: INVOICE_FEEDBACK.FAILED,
+      }))
     } finally {
       setGeneratingInvoiceIds((current) =>
         current.filter((transactionId) => transactionId !== transaction.id)
@@ -236,6 +251,8 @@ export function TransactionsDashboard({
                   const isGeneratingInvoice = generatingInvoiceIds.includes(
                     transaction.id
                   )
+                  const retryFeedback = retryFeedbackById[transaction.id]
+                  const invoiceFeedback = invoiceFeedbackById[transaction.id]
                   const canSelect =
                     transaction.status === TRANSACTION_STATUS.FAILED &&
                     !isRetrying
@@ -281,28 +298,35 @@ export function TransactionsDashboard({
                       <TableCell>
                         <StatusBadge
                           isRetrying={isRetrying}
+                          retryFeedback={retryFeedback}
                           status={transaction.status}
                         />
                       </TableCell>
                       <TableCell>{transaction.paymentMethod}</TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={isGeneratingInvoice}
-                          aria-label={`Download invoice for ${transaction.id}`}
-                          onClick={() =>
-                            void handleDownloadInvoice(transaction)
-                          }
-                        >
-                          {isGeneratingInvoice ? (
-                            <Spinner data-icon="inline-start" />
-                          ) : (
-                            <DownloadIcon data-icon="inline-start" />
-                          )}
-                          {isGeneratingInvoice ? "Generating" : "Download"}
-                        </Button>
+                        <div className="flex min-w-36 flex-col items-end gap-1">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={isGeneratingInvoice}
+                            aria-label={`Download invoice for ${transaction.id}`}
+                            onClick={() =>
+                              void handleDownloadInvoice(transaction)
+                            }
+                          >
+                            {isGeneratingInvoice ? (
+                              <Spinner data-icon="inline-start" />
+                            ) : (
+                              <DownloadIcon data-icon="inline-start" />
+                            )}
+                            {isGeneratingInvoice ? "Generating" : "Download"}
+                          </Button>
+                          <InvoiceFeedbackLine
+                            feedback={invoiceFeedback}
+                            invoiceNumber={transaction.invoiceNumber}
+                          />
+                        </div>
                       </TableCell>
                     </TableRow>
                   )
@@ -374,10 +398,11 @@ function RetrySelector({
 
 interface StatusBadgeProps {
   readonly isRetrying: boolean
+  readonly retryFeedback: RetryFeedback | undefined
   readonly status: Transaction["status"]
 }
 
-function StatusBadge({ isRetrying, status }: StatusBadgeProps) {
+function StatusBadge({ isRetrying, retryFeedback, status }: StatusBadgeProps) {
   if (isRetrying) {
     return (
       <Badge variant="outline">
@@ -388,13 +413,85 @@ function StatusBadge({ isRetrying, status }: StatusBadgeProps) {
   }
 
   return (
-    <Badge
-      variant={
-        status === TRANSACTION_STATUS.SUCCESS ? "default" : "destructive"
-      }
-      className={cn(status === TRANSACTION_STATUS.SUCCESS && "min-w-16")}
-    >
-      {status}
-    </Badge>
+    <div className="flex min-w-24 flex-col items-start gap-1">
+      <Badge
+        variant={
+          status === TRANSACTION_STATUS.SUCCESS ? "default" : "destructive"
+        }
+        className={cn(status === TRANSACTION_STATUS.SUCCESS && "min-w-16")}
+      >
+        {status}
+      </Badge>
+      <RetryFeedbackLine feedback={retryFeedback} />
+    </div>
   )
+}
+
+interface RetryFeedbackLineProps {
+  readonly feedback: RetryFeedback | undefined
+}
+
+function RetryFeedbackLine({ feedback }: RetryFeedbackLineProps) {
+  if (!feedback) {
+    return null
+  }
+
+  return (
+    <span
+      aria-live="polite"
+      className={cn(
+        "text-xs",
+        feedback === RETRY_FEEDBACK.RECOVERED
+          ? "text-muted-foreground"
+          : "text-destructive"
+      )}
+    >
+      {feedback === RETRY_FEEDBACK.RECOVERED
+        ? "Retry recovered"
+        : "Retry failed"}
+    </span>
+  )
+}
+
+interface InvoiceFeedbackLineProps {
+  readonly feedback: InvoiceFeedback | undefined
+  readonly invoiceNumber: string
+}
+
+function InvoiceFeedbackLine({
+  feedback,
+  invoiceNumber,
+}: InvoiceFeedbackLineProps) {
+  if (!feedback) {
+    return null
+  }
+
+  return (
+    <span
+      aria-live="polite"
+      className={cn(
+        "text-xs",
+        feedback === INVOICE_FEEDBACK.DOWNLOADED
+          ? "text-muted-foreground"
+          : "text-destructive"
+      )}
+    >
+      {feedback === INVOICE_FEEDBACK.DOWNLOADED
+        ? `Invoice ${invoiceNumber} downloaded`
+        : "Download failed"}
+    </span>
+  )
+}
+
+function omitKeys<T>(
+  record: Readonly<Record<string, T | undefined>>,
+  keys: readonly string[]
+): Readonly<Record<string, T | undefined>> {
+  const next = { ...record }
+
+  keys.forEach((key) => {
+    delete next[key]
+  })
+
+  return next
 }
