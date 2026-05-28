@@ -19,7 +19,7 @@ All core requirements are implemented:
 
 - Next.js React project with TypeScript.
 - Payment history page showing transaction ID, amount, date/time, status, payment method, and invoice action.
-- Mock transaction data includes multiple failed payments by default.
+- Mock data includes past transactions with a `Failed` status.
 - Per-transaction `Download invoice` action.
 - Invoice download simulates a 2-second PDF generation state before triggering a browser download of a dummy PDF.
 - Download completion is acknowledged inline in the table, close to the transaction that caused it.
@@ -29,24 +29,6 @@ All core requirements are implemented:
 - Each retrying row has its own independent loading state.
 - Each row resolves independently after a random 1-4 second delay.
 - Retry simulation uses an 80% success / 20% failure outcome.
-
-Beyond the baseline:
-
-- Seven failed transactions are present by default, making the bulk retry workflow easy to demonstrate.
-- `Retry selected` and `Reset` controls live above the table where batch actions usually belong.
-- Light/dark theme switcher is included and visible in the header.
-- Inline row feedback replaces global notifications, so invoice/retry results stay tied to the relevant row.
-- Reducer-driven state model keeps selection, retry progress, and transaction status explicit and testable.
-- Playwright E2E tests cover the browser download and retry workflow.
-- `npm audit --omit=dev` was kept clean by pinning patched transitive `postcss` through `overrides`.
-
-Would be nice:
-
-- Add search, status filters, date filters, and pagination for a larger transaction history.
-- Move both mock boundaries behind Route Handlers if the exercise evolves into HTTP-level API simulation.
-- Use MSW once HTTP boundaries exist, so UI tests can exercise request/response behavior without a real backend.
-- Add optimistic analytics events for invoice downloads and retry attempts.
-- Add accessible live-region announcements for row-level retry/download state changes.
 
 ## Architecture
 
