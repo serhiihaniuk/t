@@ -9,11 +9,12 @@ I used AI as a pair programmer for scaffolding, test-shape review, and implement
 ## Implemented Requirements
 
 - Payment history table with transaction ID, amount, date/time, status, payment method, and invoice action.
-- Failed mock transactions with row-level checkboxes.
+- Seven failed mock transactions with row-level checkboxes.
 - Bulk `Retry selected` flow that starts all selected retry requests concurrently.
 - Independent per-row retry loading states; each row updates as its own simulated API call resolves.
 - Random retry delays between 1 and 4 seconds with a 20% simulated failure rate.
 - Per-transaction invoice download with a 2-second generating state, dummy PDF blob, browser download, and row-level feedback.
+- Table-level retry and reset controls, plus a visible light/dark theme switcher.
 
 ## Tech Stack
 

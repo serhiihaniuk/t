@@ -124,4 +124,40 @@ describe("TransactionsDashboard", () => {
     ).toBeInTheDocument()
     expect(downloadButton).toBeEnabled()
   })
+
+  it("resets transaction state and row feedback to the original mock data", async () => {
+    const user = userEvent.setup()
+    const retryPaymentAction = vi.fn(async () => ({
+      status: TRANSACTION_STATUS.SUCCESS,
+      transactionId: "TXN-2026-0039",
+    }))
+
+    render(
+      <TransactionsDashboard
+        initialTransactions={listMockTransactions()}
+        retryPaymentAction={retryPaymentAction}
+      />
+    )
+
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: /select failed transaction TXN-2026-0039/i,
+      })
+    )
+    await user.click(screen.getByRole("button", { name: /retry selected/i }))
+
+    const row = screen.getByRole("row", { name: /TXN-2026-0039/i })
+
+    await waitFor(() => {
+      expect(within(row).getByText("Success")).toBeInTheDocument()
+    })
+    expect(within(row).getByText("Retry recovered")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: /reset/i }))
+
+    await waitFor(() => {
+      expect(within(row).getByText("Failed")).toBeInTheDocument()
+    })
+    expect(within(row).queryByText("Retry recovered")).not.toBeInTheDocument()
+  })
 })

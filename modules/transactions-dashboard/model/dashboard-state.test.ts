@@ -98,8 +98,8 @@ describe("transactionsDashboardReducer", () => {
   it("summarizes successful billing separately from failed rows", () => {
     const summary = getTransactionsSummary(listMockTransactions())
 
-    expect(summary.successfulCount).toBe(7)
-    expect(summary.failedCount).toBe(3)
-    expect(summary.totalCents).toBe(11_893)
+    expect(summary.successfulCount).toBe(3)
+    expect(summary.failedCount).toBe(7)
+    expect(summary.totalCents).toBe(5_997)
   })
 })

@@ -11,6 +11,10 @@ export interface TransactionsDashboardState {
 }
 
 export type TransactionsDashboardAction =
+  | {
+      readonly type: "state/reset"
+      readonly transactions: readonly Transaction[]
+    }
   | { readonly type: "selection/toggled"; readonly transactionId: string }
   | { readonly type: "selection/cleared" }
   | {
@@ -43,6 +47,8 @@ export function transactionsDashboardReducer(
   action: TransactionsDashboardAction
 ): TransactionsDashboardState {
   switch (action.type) {
+    case "state/reset":
+      return createDashboardState(action.transactions)
     case "selection/toggled":
       return toggleSelection(state, action.transactionId)
     case "selection/cleared":

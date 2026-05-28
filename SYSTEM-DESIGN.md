@@ -13,7 +13,7 @@ The hiring goal matters as much as the feature list: the implementation should l
 | C1  | New React project using Next.js | Next.js App Router, React 19, TypeScript                                  |
 | C2  | TypeScript                      | Strict TypeScript enabled, tests included                                 |
 | C3  | Payment history page            | Table shows ID, amount, date/time, status, payment method, invoice action |
-| C4  | Failed mock transactions        | Mock dataset includes 3 failed rows                                       |
+| C4  | Failed mock transactions        | Mock dataset includes 7 failed rows                                       |
 | C5  | Download invoice per row        | Every transaction has a download button                                   |
 | C6  | 2-second PDF generation state   | Per-row `Generating` state before download                                |
 | C7  | Browser download                | Dummy PDF Blob downloaded via object URL                                  |
@@ -24,6 +24,7 @@ The hiring goal matters as much as the feature list: the implementation should l
 | C12 | Independent row loading         | Retrying rows show their own spinner/status                               |
 | C13 | Independent row completion      | Each row updates as its own promise resolves                              |
 | C14 | Retry timing/outcome            | Random 1-4s delay, 20% simulated failure rate                             |
+| C15 | Reset and theme controls        | Table controls include retry/reset; header includes light/dark switcher   |
 
 ## 3. Non-goals
 

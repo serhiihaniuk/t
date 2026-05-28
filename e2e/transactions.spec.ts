@@ -47,3 +47,34 @@ test("retries selected failed payments without blocking the whole table", async 
   ).toBeVisible()
   await expect(page.getByText("Retrying")).toHaveCount(0, { timeout: 6_000 })
 })
+
+test("resets selected rows and toggles the theme", async ({ page }) => {
+  await page.goto("/")
+
+  const failedCheckbox = page.getByRole("checkbox", {
+    name: /select failed transaction TXN-2026-0041/i,
+  })
+
+  await failedCheckbox.click()
+  await expect(
+    page.getByRole("button", { name: /retry selected/i })
+  ).toBeEnabled()
+
+  await page.getByRole("button", { name: /reset/i }).click()
+
+  await expect(failedCheckbox).not.toBeChecked()
+  await expect(
+    page.getByRole("button", { name: /retry selected/i })
+  ).toBeDisabled()
+
+  const html = page.locator("html")
+  const classBeforeToggle = (await html.getAttribute("class")) ?? ""
+
+  await page
+    .getByRole("button", { name: /switch to (dark|light) theme/i })
+    .click()
+
+  await expect
+    .poll(async () => (await html.getAttribute("class")) ?? "")
+    .not.toBe(classBeforeToggle)
+})

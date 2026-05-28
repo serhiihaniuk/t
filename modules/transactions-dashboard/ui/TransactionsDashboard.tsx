@@ -1,13 +1,19 @@
 "use client"
 
-import { DownloadIcon, RefreshCwIcon } from "lucide-react"
-import { useMemo, useReducer, useState } from "react"
+import {
+  DownloadIcon,
+  MoonIcon,
+  RefreshCwIcon,
+  RotateCcwIcon,
+  SunIcon,
+} from "lucide-react"
+import { useMemo, useReducer, useRef, useState } from "react"
+import { useTheme } from "next-themes"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -87,6 +93,7 @@ export function TransactionsDashboard({
   const [invoiceFeedbackById, setInvoiceFeedbackById] = useState<
     Readonly<Record<string, InvoiceFeedback | undefined>>
   >({})
+  const retryRunIdRef = useRef(0)
 
   const retryableSelectedIds = getRetryableSelectedIds(state)
   const summary = useMemo(
@@ -102,12 +109,18 @@ export function TransactionsDashboard({
       return
     }
 
+    const retryRunId = retryRunIdRef.current
+
     dispatch({ transactionIds, type: "retry/started" })
     setRetryFeedbackById((current) => omitKeys(current, transactionIds))
 
     transactionIds.forEach((transactionId) => {
       void retryPaymentAction(transactionId)
         .then((result) => {
+          if (retryRunIdRef.current !== retryRunId) {
+            return result
+          }
+
           setRetryFeedbackById((current) => ({
             ...current,
             [transactionId]:
@@ -119,6 +132,10 @@ export function TransactionsDashboard({
           return result
         })
         .catch(() => {
+          if (retryRunIdRef.current !== retryRunId) {
+            return undefined
+          }
+
           const result = {
             status: TRANSACTION_STATUS.FAILED,
             transactionId,
@@ -131,6 +148,14 @@ export function TransactionsDashboard({
           return result
         })
     })
+  }
+
+  function handleReset(): void {
+    retryRunIdRef.current += 1
+    dispatch({ transactions: initialTransactions, type: "state/reset" })
+    setGeneratingInvoiceIds([])
+    setRetryFeedbackById({})
+    setInvoiceFeedbackById({})
   }
 
   async function handleDownloadInvoice(
@@ -161,7 +186,7 @@ export function TransactionsDashboard({
   return (
     <main className="min-h-svh bg-background text-foreground">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-        <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div className="flex flex-col gap-1">
             <p className="text-sm font-medium text-muted-foreground">
               Streamly billing
@@ -174,21 +199,7 @@ export function TransactionsDashboard({
               payments in bulk.
             </p>
           </div>
-          <Button
-            type="button"
-            variant={
-              retryableSelectedIds.length === 0 ? "secondary" : "default"
-            }
-            disabled={retryableSelectedIds.length === 0}
-            onClick={handleRetrySelected}
-          >
-            {anyRetryInFlight ? (
-              <Spinner data-icon="inline-start" />
-            ) : (
-              <RefreshCwIcon data-icon="inline-start" />
-            )}
-            Retry selected
-          </Button>
+          <ThemeToggle />
         </header>
 
         <section
@@ -223,13 +234,40 @@ export function TransactionsDashboard({
             <CardDescription>
               Invoices are generated locally as dummy PDF files for this mock.
             </CardDescription>
-            <CardAction>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <Badge variant="outline">
                 {state.transactions.length} transactions
               </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardContent>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleReset}
+                >
+                  <RotateCcwIcon data-icon="inline-start" />
+                  Reset
+                </Button>
+                <Button
+                  type="button"
+                  variant={
+                    retryableSelectedIds.length === 0 ? "secondary" : "default"
+                  }
+                  size="sm"
+                  disabled={retryableSelectedIds.length === 0}
+                  onClick={handleRetrySelected}
+                >
+                  {anyRetryInFlight ? (
+                    <Spinner data-icon="inline-start" />
+                  ) : (
+                    <RefreshCwIcon data-icon="inline-start" />
+                  )}
+                  Retry selected
+                </Button>
+              </div>
+            </div>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -357,6 +395,29 @@ function SummaryCard({ label, value, description }: SummaryCardProps) {
         <p className="text-sm text-muted-foreground">{description}</p>
       </CardContent>
     </Card>
+  )
+}
+
+function ThemeToggle() {
+  const { resolvedTheme, setTheme } = useTheme()
+  const isDark = resolvedTheme === "dark"
+  const nextTheme = isDark ? "light" : "dark"
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      aria-label={`Switch to ${nextTheme} theme`}
+      onClick={() => setTheme(nextTheme)}
+    >
+      {isDark ? (
+        <SunIcon data-icon="inline-start" />
+      ) : (
+        <MoonIcon data-icon="inline-start" />
+      )}
+      {isDark ? "Light mode" : "Dark mode"}
+    </Button>
   )
 }
 
