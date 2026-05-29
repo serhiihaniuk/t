@@ -4,7 +4,7 @@ Use these prompts to check whether the skill guides agents toward the right test
 
 ## Prompt 1
 
-Use `$transactions-dashboard-testing-architecture` to add coverage for a new requirement: failed rows should remain selectable after a retry fails.
+Use `$testing` to add coverage for a new requirement: failed rows should remain selectable after a retry fails.
 
 Expected direction:
 
@@ -14,7 +14,7 @@ Expected direction:
 
 ## Prompt 2
 
-Use `$transactions-dashboard-testing-architecture` to review a test that uses `page.waitForTimeout(4000)` after clicking `Retry selected`.
+Use `$testing` to review a test that uses `page.waitForTimeout(4000)` after clicking `Retry selected`.
 
 Expected direction:
 
@@ -24,7 +24,7 @@ Expected direction:
 
 ## Prompt 3
 
-Use `$transactions-dashboard-testing-architecture` to test that the activity menu closes when the user clicks outside it.
+Use `$testing` to test that the activity menu closes when the user clicks outside it.
 
 Expected direction:
 
@@ -33,7 +33,7 @@ Expected direction:
 
 ## Prompt 4
 
-Use `$transactions-dashboard-testing-architecture` to test a refactor that moves the theme sync script.
+Use `$testing` to test a refactor that moves the theme sync script.
 
 Expected direction:
 

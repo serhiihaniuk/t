@@ -1,7 +1,0 @@
-interface:
-  display_name: "Transactions Dashboard Testing"
-  short_description: "Testing guide for the take-home app"
-  default_prompt: "Use $transactions-dashboard-testing-architecture when writing, reviewing, or refactoring tests for the Transactions Management Dashboard."
-
-policy:
-  allow_implicit_invocation: true
