@@ -6,7 +6,7 @@ import {
   generateInvoicePdf,
   INVOICE_GENERATION_DELAY_MS,
 } from "./invoice-download"
-import { listMockTransactions } from "./mock-transactions"
+import { listMockTransactions } from "@/modules/transactions-dashboard/model/transaction/mock-transactions"
 
 const transaction = listMockTransactions()[0]
 
@@ -31,9 +31,12 @@ describe("invoice download helpers", () => {
     vi.useFakeTimers()
     const promise = generateInvoicePdf(transaction)
     let settled = false
-    void promise.then(() => {
+    const markSettled = async () => {
+      await promise
       settled = true
-    })
+    }
+
+    void markSettled()
 
     await vi.advanceTimersByTimeAsync(INVOICE_GENERATION_DELAY_MS - 1)
     expect(settled).toBe(false)

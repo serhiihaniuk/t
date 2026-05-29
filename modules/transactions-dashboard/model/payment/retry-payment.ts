@@ -1,4 +1,7 @@
-import { TRANSACTION_STATUS, type RetryPaymentResult } from "./types"
+import {
+  TRANSACTION_STATUS,
+  type RetryPaymentResult,
+} from "@/modules/transactions-dashboard/model/transaction/transaction"
 
 export const RETRY_FAILURE_RATE = 0.2
 export const MIN_RETRY_DELAY_MS = 1_000

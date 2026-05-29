@@ -1,5 +1,8 @@
-import { formatMoney, formatTransactionDateTime } from "./formatters"
-import type { Transaction } from "./types"
+import {
+  formatMoney,
+  formatTransactionDateTime,
+} from "@/modules/transactions-dashboard/model/transaction/formatters"
+import type { Transaction } from "@/modules/transactions-dashboard/model/transaction/transaction"
 
 export const INVOICE_GENERATION_DELAY_MS = 2_000
 

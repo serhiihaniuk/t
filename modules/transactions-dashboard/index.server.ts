@@ -1,1 +1,1 @@
-export { TransactionsPage } from "./ui/TransactionsPage"
+export { TransactionsPage } from "./ui/page/TransactionsPage"

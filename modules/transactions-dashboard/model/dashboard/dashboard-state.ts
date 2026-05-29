@@ -2,7 +2,7 @@ import {
   TRANSACTION_STATUS,
   type RetryPaymentResult,
   type Transaction,
-} from "./types"
+} from "@/modules/transactions-dashboard/model/transaction/transaction"
 
 export interface TransactionsDashboardState {
   readonly transactions: readonly Transaction[]
@@ -79,27 +79,26 @@ export function getRetryableSelectedIds(
 export function getTransactionsSummary(
   transactions: readonly Transaction[]
 ): TransactionsSummary {
-  return transactions.reduce<TransactionsSummary>(
-    (summary, transaction) => {
-      if (transaction.status === TRANSACTION_STATUS.FAILED) {
-        return {
-          ...summary,
-          failedCount: summary.failedCount + 1,
-        }
-      }
+  let failedCount = 0
+  let successfulCount = 0
+  let totalCents = 0
 
-      return {
-        ...summary,
-        successfulCount: summary.successfulCount + 1,
-        totalCents: summary.totalCents + transaction.amountCents,
-      }
-    },
-    {
-      failedCount: 0,
-      successfulCount: 0,
-      totalCents: 0,
+  transactions.forEach((transaction) => {
+    if (transaction.status === TRANSACTION_STATUS.FAILED) {
+      failedCount += 1
+
+      return
     }
-  )
+
+    successfulCount += 1
+    totalCents += transaction.amountCents
+  })
+
+  return {
+    failedCount,
+    successfulCount,
+    totalCents,
+  }
 }
 
 function toggleSelection(

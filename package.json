@@ -9,18 +9,18 @@
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
+    "check:file-size": "node scripts/check-file-size-limit.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "verify": "npm run typecheck && npm run lint && npm run test && npm run build"
+    "verify": "npm run check:file-size && npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.17.0",
     "next": "16.2.6",
-    "next-themes": "^0.4.6",
     "radix-ui": "^1.4.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -50,8 +50,5 @@
   "overrides": {
     "postcss": "^8.5.10"
   },
-  "packageManager": "npm@11.12.1",
-  "workspaces": [
-    "."
-  ]
+  "packageManager": "npm@11.12.1"
 }

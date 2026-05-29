@@ -7,7 +7,7 @@ import {
   MIN_RETRY_DELAY_MS,
   retryPayment,
 } from "./retry-payment"
-import { TRANSACTION_STATUS } from "./types"
+import { TRANSACTION_STATUS } from "@/modules/transactions-dashboard/model/transaction/transaction"
 
 describe("retryPayment", () => {
   it("calculates delays within the 1 to 4 second retry window", () => {
@@ -26,9 +26,12 @@ describe("retryPayment", () => {
     const random = vi.fn().mockReturnValueOnce(0).mockReturnValueOnce(0.8)
     const promise = retryPayment("TXN-TEST-1", { random })
     let settled = false
-    void promise.then(() => {
+    const markSettled = async () => {
+      await promise
       settled = true
-    })
+    }
+
+    void markSettled()
 
     await vi.advanceTimersByTimeAsync(MIN_RETRY_DELAY_MS - 1)
     expect(settled).toBe(false)

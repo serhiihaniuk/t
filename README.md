@@ -4,14 +4,24 @@ Mock streaming-service billing dashboard for reviewing transaction history, down
 
 The assignment is intentionally small, so I treated the interesting part as product-quality execution: clear state transitions, visible per-row feedback, a polished table UI, and enough tests to make the concurrent retry behavior safe to change during an interview.
 
-## AI Disclosure
+## Getting Started
 
-I approached this task the same way I approach everyday engineering work. AI assisted with scaffolding, implementation speed, and review prompts, but every architectural decision, code review, refactor, and verification step was mine. This project is not blind AI generation.
+```bash
+npm install
+npm run dev
+```
 
-1. **System design** - Designed the feature boundaries, data flow, state model, and test strategy before implementation. Documented in `SYSTEM-DESIGN.md`.
-2. **Implementation** - Split the work into isolated slices: project setup, domain model, dashboard UI, invoice download, retry simulation, tests, and polish.
-3. **Manual verification** - Ran the app locally, checked the table workflow in the browser, verified invoice download behavior, retry loading states, reset behavior, and light/dark theme switching.
-4. **Code review and refactoring** - Reviewed the implementation file by file, removed unnecessary scaffold placeholders, replaced global toast feedback with inline table feedback, and kept the architecture small enough to explain clearly.
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000).
+
+## How I Work With AI
+
+I use AI as a structured engineering partner, not as an autopilot. My goal is to make the work more deliberate: design first, implementation second, verification always.
+
+1. **Start with system design through Ralplan** - I begin with the requirements and run a Ralplan workflow, where separate AI roles such as an analytic planner, critic, and architect challenge the direction until there is a practical consensus. This helps reduce the confirmation bias that can happen when one assistant in one chat starts agreeing too easily with the original idea.
+2. **Create the design artifact first** - The first durable output is a system design document. For this project, that is `SYSTEM-DESIGN.md`; it describes the feature boundaries, state model, data flow, tradeoffs, and test strategy before implementation starts.
+3. **Implement from the design** - After the design is clear enough, I build the first version in small slices: transaction model, mock data retrieval, retry simulation, invoice generation, dashboard UI, activity feedback, tests, and polish.
+4. **Add guardrails after the first version** - Once the app exists, I tighten it with tests, linting, project-specific scripts, and architecture checks. The file-size script is especially important because it stops AI-assisted work from drifting into long, hard-to-review files.
+5. **Iterate against the design** - I keep comparing the implementation back to the system design and adjust both until the code, docs, tests, and product behavior match the intended shape.
 
 ## Requirements Coverage
 
@@ -29,33 +39,22 @@ All core requirements are implemented:
 - Each retrying row has its own independent loading state.
 - Each row resolves independently after a random 1-4 second delay.
 - Retry simulation uses an 80% success / 20% failure outcome.
+- A compact activity log narrates retry batches, individual retry outcomes, and invoice generation/download results.
 
 ## Architecture
 
-Project follows a focused vertical-slice architecture inspired by Feature-Sliced Design, trimmed to the size of this assignment. The route layer stays thin, and the dashboard feature owns its own data contracts, mock API boundary, state reducer, UI, and tests.
+The app uses a small vertical-slice structure around `modules/transactions-dashboard`. The route layer stays thin: `app/page.tsx` renders the server-safe page, loads mock transactions, and passes serializable data into a narrow client workflow island.
 
-`app/page.tsx` is a server route entry. It imports the server-safe dashboard page, retrieves mock transactions, and passes serializable data into the client dashboard.
+Inside the feature:
 
-`TransactionsDashboard.tsx` is the client island because it owns browser-only behavior: row selection, timers, retry promises, Blob download, object URLs, and theme-aware interactive controls.
+- `model/` contains the pure dashboard state, transaction contracts, retry policy, invoice helpers, and activity messages.
+- `commands/transactions-dashboard-actions.ts` is the injected command boundary, so the UI does not care whether retry and invoice work is mock code, a Route Handler, or a real backend.
+- `ui/` is grouped by responsibility: server dashboard shell, client workflow island, payment history table, activity callout, summary cards, theme toggle, and page wrapper.
+- `api/get-transactions.ts` represents initial server-side data retrieval.
 
-`dashboard-state.ts` is the center of the feature. It models selection, retry progress, row status updates, reset behavior, and derived summary data with a pure reducer. Keeping this logic outside the component makes concurrent retry behavior easy to test without depending on animation or DOM timing.
+The riskiest behavior is concurrent retry state, so `dashboard-state.ts` keeps selection, retrying rows, reset, and summary logic in a pure reducer. Browser-only workflow state lives in `use-transactions-dashboard.ts`; rows get stable callbacks and set-backed lookup state so independent row updates stay cheap.
 
-TypeScript strict mode is used as a shift-left strategy. Domain constants are defined once and exported as const-derived types, reducer actions are discriminated unions, and invalid UI states are avoided through the state model:
-
-- Successful rows are not selectable.
-- Failed rows are selectable only while idle.
-- Retrying rows cannot be toggled.
-- A failed retry returns the row to `Failed`.
-- A successful retry updates only that row to `Success`.
-
-The mock API split is deliberate:
-
-- `api/get-transactions.ts` represents the server-side retrieval boundary used by the initial page render.
-- `model/retry-payment.ts` represents a client-side payment retry simulator because the assignment is about concurrent per-row UI behavior, not HTTP plumbing.
-
-If the next requirement asks for real request/response semantics, `retry-payment.ts` can move behind a Next.js Route Handler without changing the reducer contract.
-
-Testing is unit-heavy by design. The riskiest behavior is concurrent state transition, so reducer, retry timing, invoice generation, component behavior, and browser download paths all have focused coverage.
+Tests focus on reducer behavior, retry/invoice timing, component interactions, browser downloads, and theme flash prevention. The longer tradeoffs and data-flow notes are in `SYSTEM-DESIGN.md`.
 
 ## Data Flow
 
@@ -70,7 +69,7 @@ Browser requests /
   |    |
   |    +- returns realistic mock payment history
   |
-  +- TransactionsDashboard receives initial transactions
+  +- server dashboard shell receives initial transactions
   |
   +- reducer initializes:
        transactions, selectedIds = [], retryingIds = []
@@ -88,6 +87,7 @@ User selects failed rows
   +- Retry selected clicked
   |
   +- reducer marks selected IDs as retrying and clears selection
+  +- activity log records the retry batch start
   |
   +- retryPayment(id) starts for every selected row immediately
   |    |
@@ -99,6 +99,7 @@ User selects failed rows
        +- reducer updates only that transaction
        +- row leaves loading state
        +- inline result becomes "Retry recovered" or "Retry failed"
+       +- activity log records that row's outcome
 ```
 
 Invoice download:
@@ -107,6 +108,8 @@ Invoice download:
 Download invoice clicked
   |
   +- row enters "Generating" state
+  |
+  +- activity log records invoice generation
   |
   +- wait 2 seconds
   |
@@ -117,76 +120,90 @@ Download invoice clicked
   +- revoke object URL
   |
   +- row shows "Invoice INV-... downloaded"
+  +- activity log records the download result
 ```
 
 ## Project Structure
 
 ```text
 app/
-├── globals.css                       # Tailwind v4 + shadcn preset tokens
-├── layout.tsx                        # Metadata and theme provider
-└── page.tsx                          # Server route entry
+|-- globals.css                       # Tailwind v4 + shadcn preset tokens
+|-- layout.tsx                        # Metadata and theme bootstrap
+|-- page.tsx                          # Server route entry
 
 components/
-├── theme-provider.tsx                # next-themes provider
-└── ui/                               # shadcn/ui source components
-    ├── badge.tsx
-    ├── button.tsx
-    ├── card.tsx
-    ├── checkbox.tsx
-    ├── spinner.tsx
-    └── table.tsx
+|-- theme-sync-script.tsx             # Pre-hydration theme sync script
+`-- ui/                               # shadcn/ui source components
 
 modules/
-└── transactions-dashboard/
-    ├── api/
-    │   └── get-transactions.ts       # Mock server-side data retrieval
-    ├── model/
-    │   ├── dashboard-state.ts        # Pure reducer, selectors, reset/summary logic
-    │   ├── dashboard-state.test.ts
-    │   ├── formatters.ts             # Currency and stable date/time formatting
-    │   ├── invoice-download.ts       # 2s invoice generation + PDF download helpers
-    │   ├── invoice-download.test.ts
-    │   ├── mock-transactions.ts      # Realistic mock billing history
-    │   ├── retry-payment.ts          # Random delay + 20% failure simulation
-    │   ├── retry-payment.test.ts
-    │   └── types.ts                  # Domain constants and TypeScript contracts
-    ├── ui/
-    │   ├── TransactionsDashboard.tsx # Client island and interactive table
-    │   ├── TransactionsDashboard.test.tsx
-    │   └── TransactionsPage.tsx      # Server-compatible feature composition
-    ├── index.ts                      # Shared public exports
-    ├── index.client.ts               # Client/test public exports
-    └── index.server.ts               # Server-safe public exports
+`-- transactions-dashboard/
+    |-- api/
+    |   `-- get-transactions.ts       # Mock server-side data retrieval
+    |-- commands/
+    |   `-- transactions-dashboard-actions.ts
+    |-- model/
+    |   |-- activity/
+    |   |   `-- activity-log.ts       # Async activity message builders
+    |   |-- dashboard/
+    |   |   |-- dashboard-state.ts     # Pure reducer, selectors, summary logic
+    |   |   `-- dashboard-state.test.ts
+    |   |-- invoice/
+    |   |   |-- invoice-download.ts    # 2s PDF generation + browser download
+    |   |   `-- invoice-download.test.ts
+    |   |-- payment/
+    |   |   |-- retry-payment.ts       # Random delay + 20% failure simulation
+    |   |   `-- retry-payment.test.ts
+    |   `-- transaction/
+    |       |-- formatters.ts          # Currency and stable UTC date formatting
+    |       |-- mock-transactions.ts   # Realistic mock billing history
+    |       `-- transaction.ts        # Domain constants and contracts
+    |-- ui/
+    |   |-- activity/
+    |   |   `-- ActivityCallout.tsx
+    |   |-- dashboard/
+    |   |   |-- TransactionsDashboard.tsx       # Server shell
+    |   |   |-- TransactionsDashboardClient.tsx # Client workflow island
+    |   |   |-- TransactionsDashboard.test.tsx
+    |   |   |-- dashboard-feedback.ts
+    |   |   `-- use-transactions-dashboard.ts
+    |   |-- page/
+    |   |   `-- TransactionsPage.tsx
+    |   |-- payment-history/
+    |   |   |-- PaymentHistoryRow.tsx
+    |   |   `-- PaymentHistoryTable.tsx
+    |   |-- summary/
+    |   |   `-- SummaryCard.tsx
+    |   `-- theme/
+    |       `-- ThemeToggle.tsx
+    |-- index.ts
+    |-- index.client.ts
+    `-- index.server.ts
+
+scripts/
+`-- check-file-size-limit.mjs        # Small-file architecture guard
+
+.agents/skills/testing/               # Local testing guidance for agents
 
 e2e/
-└── transactions.spec.ts              # Playwright browser coverage
+`-- transactions.spec.ts              # Playwright browser coverage
 
 test/
-└── setup.ts                          # Vitest DOM setup
+`-- setup.ts                          # Vitest DOM setup
 
 SYSTEM-DESIGN.md                      # Detailed design and tradeoffs
 ```
-
-## Getting Started
-
-```bash
-npm install
-npm run dev
-```
-
-Open [http://127.0.0.1:3000](http://127.0.0.1:3000).
 
 ## Tests
 
 ```bash
 npm run typecheck   # TypeScript strict-mode check
 npm run lint        # ESLint
+npm run check:file-size # Guard against oversized files
 npm run test        # Vitest unit/component tests
 npm run test:e2e    # Playwright E2E tests
 npm run build       # Production build
-npm run verify      # typecheck + lint + test + build
+npm run verify      # file-size + typecheck + lint + test + build
 npm audit --omit=dev
 ```
 
-`npm run verify` is the main pre-submission command. `npm run test:e2e` is kept separate because it launches a browser.
+`npm run verify` is the main pre-submission command. `npm run test:e2e` is kept separate because it launches a browser. The file-size check follows the same rule as the chat codebase: split large source files instead of hiding complex behavior in one oversized module.

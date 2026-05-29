@@ -1,96 +1,178 @@
 # Transactions Management Dashboard - System Design
 
-## 1. Overview
+## Short Version
 
-This project is a take-home Transactions Management Dashboard for a streaming-service subscriber. The user can review past payments, download mock invoices, and retry failed payments in bulk.
+This project is a focused billing dashboard for a streaming-service customer.
+The user can review past payments, download mock invoices, and retry failed
+payments in bulk.
 
-The hiring goal matters as much as the feature list: the implementation should look like a polished product slice, while staying small enough to explain, test, and modify during a technical interview.
+The main engineering challenge is not the table itself. The hard part is making
+several slow async actions feel clear and trustworthy:
 
-## 2. Requirements
+- invoice generation takes 2 seconds per row
+- payment retries run at the same time
+- each retry can finish in a different order
+- each row must show its own loading and final result
+- the user should always know what just happened
 
-| ID  | Requirement                     | Implementation                                                            |
-| --- | ------------------------------- | ------------------------------------------------------------------------- |
-| C1  | New React project using Next.js | Next.js App Router, React 19, TypeScript                                  |
-| C2  | TypeScript                      | Strict TypeScript enabled, tests included                                 |
-| C3  | Payment history page            | Table shows ID, amount, date/time, status, payment method, invoice action |
-| C4  | Failed mock transactions        | Mock dataset includes 7 failed rows                                       |
-| C5  | Download invoice per row        | Every transaction has a download button                                   |
-| C6  | 2-second PDF generation state   | Per-row `Generating` state before download                                |
-| C7  | Browser download                | Dummy PDF Blob downloaded via object URL                                  |
-| C8  | Download notification           | Row-level invoice feedback in the table                                   |
-| C9  | Failed row selection            | Only failed, idle rows render selectable checkboxes                       |
-| C10 | Batch retry                     | `Retry selected` starts all selected retries immediately                  |
-| C11 | Concurrent retry simulation     | Each retry call is fired independently                                    |
-| C12 | Independent row loading         | Retrying rows show their own spinner/status                               |
-| C13 | Independent row completion      | Each row updates as its own promise resolves                              |
-| C14 | Retry timing/outcome            | Random 1-4s delay, 20% simulated failure rate                             |
-| C15 | Reset and theme controls        | Table controls include retry/reset; header includes light/dark switcher   |
+The design keeps that behavior easy to reason about. Server-rendered parts stay
+on the server, browser-only work is isolated in one client island, and the retry
+state is modeled with a small pure reducer that is covered by tests.
 
-## 3. Non-goals
+## Product Goal
 
-- No real backend or payment provider.
-- No authentication.
-- No persistent database.
-- No real invoice service.
-- No pagination/filtering in the baseline.
+The dashboard should feel like a real subscription billing page, not a demo
+screen. It should help the customer answer three questions quickly:
 
-These are deliberate exclusions. They keep the assignment focused on the requested subscriber workflow and make the result easier to present.
+1. What have I been charged for?
+2. Which payments failed?
+3. Can I recover failed payments and download invoices without guessing what the
+   app is doing?
 
-## 4. Technology Choices
+That is why the UI favors a clean table, row-level feedback, and a compact
+activity popover over global toast spam.
 
-| Concern              | Choice                                         | Rationale                                                              |
-| -------------------- | ---------------------------------------------- | ---------------------------------------------------------------------- |
-| Framework            | Next.js App Router                             | Modern React Server/Client Component model; good take-home signal      |
-| Language             | TypeScript                                     | Required by task; reducer/actions are strongly typed                   |
-| UI                   | Tailwind CSS v4 + shadcn/ui preset `b1Z5baiES` | Polished component primitives without custom design-system overhead    |
-| State                | `useReducer`                                   | Retry workflow has real transitions, but no global app state is needed |
-| Inline feedback      | Row-level table messages                       | Keeps invoice/retry responses near the action that caused them         |
-| Unit/component tests | Vitest + React Testing Library                 | Fast deterministic coverage for timers, reducer, and interactions      |
-| E2E                  | Playwright                                     | Verifies the actual browser download and retry flow                    |
+## What Reviewers Should Notice
 
-## 5. Architecture
+- **Server-first rendering:** the route, page wrapper, and static dashboard
+  shell stay as Server Components. Only the interactive billing workflow is a
+  Client Component.
+- **Clear async state:** retrying, selected, and completed rows are separate
+  states. There is no overloaded `status` field trying to mean everything.
+- **Independent row updates:** retries are not blocked behind `Promise.all`.
+  Every row resolves as soon as its own simulated API call finishes.
+- **Replaceable commands:** the UI calls injected dashboard actions. The mock
+  code can later be replaced with Route Handlers or a real payment service
+  without rewriting the table.
+- **Tests focus on risk:** the test suite spends most of its effort on
+  concurrent retries, invoice generation, browser downloads, theme flash
+  prevention, and popover behavior.
+- **Small files by design:** the code is split at real boundaries and protected
+  by a file-size check, so the project stays reviewable during an interview.
 
-The app uses a thin route layer and a focused vertical module.
+## Requirements Covered
+
+| Requirement | How it is handled |
+| --- | --- |
+| Next.js + TypeScript | App Router, React 19, strict TypeScript |
+| Payment history | Table shows transaction ID, amount, date/time, status, method, invoice action |
+| Failed transactions | Mock data includes failed rows eligible for retry |
+| Invoice download | Every row can generate and download a dummy PDF |
+| 2-second invoice state | The clicked row shows `Generating` before download |
+| Download feedback | The row shows a downloaded or failed message |
+| Bulk retry | Failed rows can be selected and retried together |
+| Concurrent retry | Each selected row starts its retry immediately |
+| Independent loading | Each retrying row shows its own spinner |
+| Independent result | Each row updates as its own retry finishes |
+| Random retry outcome | Mock retry uses 1-4 second delay and 20% failure rate |
+| Async activity | Toolbar activity records retry and invoice lifecycle events |
+| Theme persistence | Dark/light choice is applied before hydration |
+
+## Folder Shape
+
+The feature lives in one module because this is one product slice. Inside that
+module, files are grouped by responsibility:
 
 ```text
 app/
-  layout.tsx                         # Metadata and theme provider
-  page.tsx                           # Server route entry, renders TransactionsPage
-  globals.css                        # Tailwind v4 + shadcn preset tokens
+  layout.tsx                         # metadata and theme bootstrap
+  page.tsx                           # server route entry
+  globals.css                        # Tailwind and shadcn tokens
+
+components/
+  theme-sync-script.tsx              # applies saved theme before hydration
+  ui/                                # shadcn/ui primitives
 
 modules/transactions-dashboard/
   api/
-    get-transactions.ts              # Mock server-side retrieval boundary
+    get-transactions.ts              # server-side mock data retrieval
+  commands/
+    transactions-dashboard-actions.ts # retry/invoice actions used by the UI
   model/
-    dashboard-state.ts               # Reducer, selectors, summary derivation
-    formatters.ts                    # Currency and stable UTC date formatting
-    invoice-download.ts              # 2s invoice generation + PDF/blob helpers
-    mock-transactions.ts             # Realistic mock dataset
-    retry-payment.ts                 # Random delay + 20% failure simulation
-    types.ts                         # Domain constants and contracts
+    activity/
+      activity-log.ts                # activity messages
+    dashboard/
+      dashboard-state.ts             # reducer, selectors, summary logic
+    invoice/
+      invoice-download.ts            # invoice PDF and browser download helpers
+    payment/
+      retry-payment.ts               # retry delay and failure simulation
+    transaction/
+      transaction.ts                 # transaction constants and types
+      mock-transactions.ts           # mock billing history
+      formatters.ts                  # money and date formatting
   ui/
-    TransactionsPage.tsx             # Server-compatible composition
-    TransactionsDashboard.tsx        # Client island with table-level action feedback
-  index.ts                           # Shared public types/constants
-  index.server.ts                    # Server-safe public entry
-  index.client.ts                    # Client/test public entry
-
-components/ui/                       # shadcn/ui source components
-e2e/                                 # Playwright coverage
-test/                                # Vitest setup
+    page/
+      TransactionsPage.tsx           # server feature entry
+    dashboard/
+      TransactionsDashboard.tsx      # server shell
+      TransactionsDashboardClient.tsx # client workflow island
+      use-transactions-dashboard.ts  # browser workflow state
+      dashboard-feedback.ts          # row feedback constants
+    payment-history/
+      PaymentHistoryTable.tsx        # table shell
+      PaymentHistoryRow.tsx          # memoized row
+    activity/
+      ActivityCallout.tsx            # latest event + popover history
+    summary/
+      SummaryCard.tsx                # metric card
+    theme/
+      ThemeToggle.tsx                # small client theme control
 ```
 
-Boundary rules:
+## Render Boundary
 
-- `app/page.tsx` imports from `@/modules/transactions-dashboard/index.server`.
-- `TransactionsPage` loads mock transactions on the server and passes serializable data to the client dashboard.
-- Browser APIs (`window`, Blob download, timers for invoice generation) stay below the `"use client"` dashboard boundary.
-- The reducer is pure and independently tested.
-- Randomness and timer-sensitive behavior live behind small functions so tests can control outcomes.
+The app starts on the server and only moves to the client where browser behavior
+is required.
 
-## 6. State Model
+```text
+Browser requests /
+  |
+  +- app/page.tsx
+       |
+       +- TransactionsPage
+            |
+            +- getTransactions() on the server
+            |
+            +- TransactionsDashboard server shell
+                 |
+                 +- static heading, copy, layout
+                 |
+                 +- TransactionsDashboardClient
+                      |
+                      +- row selection
+                      +- retry actions
+                      +- invoice generation/download
+                      +- activity popover state
+```
 
-Domain status and UI progress are separate. A transaction has a persisted-like status (`Success` or `Failed`), while retry progress is tracked in `retryingIds`.
+This keeps the page simple and avoids turning the whole screen into a Client
+Component just because a few controls need browser APIs.
+
+## Main Design Choices
+
+### 1. The dashboard uses injected actions
+
+The client dashboard receives a `TransactionsDashboardActions` object:
+
+```ts
+export interface TransactionsDashboardActions {
+  readonly retryPayment: RetryPaymentAction
+  readonly generateInvoice: GenerateInvoiceAction
+  readonly downloadInvoice: DownloadInvoiceAction
+  readonly buildInvoiceFileName: (transaction: Transaction) => string
+}
+```
+
+The default implementation is mock code, but the UI does not know that. This is
+useful during an interview because a follow-up change can replace the actions
+with real HTTP calls while keeping the reducer, table, and feedback behavior.
+
+### 2. Domain status is separate from UI progress
+
+A transaction has a business status: `Success` or `Failed`.
+
+The dashboard also tracks UI progress:
 
 ```ts
 export interface TransactionsDashboardState {
@@ -100,88 +182,161 @@ export interface TransactionsDashboardState {
 }
 ```
 
-This prevents ambiguous states:
+This keeps the state honest:
 
-- Successful rows are never selectable.
-- Failed rows are selectable only while idle.
-- Retrying rows show a spinner and cannot be toggled.
-- A failed retry returns the row to `Failed`, so the user can select it again.
-- A successful retry updates only that row to `Success`.
+- a successful transaction is never selectable
+- a failed transaction is selectable only when it is not retrying
+- a retrying transaction cannot be toggled
+- a failed retry returns the row to `Failed`
+- a successful retry updates only that row to `Success`
 
-## 7. Retry Flow
+### 3. Concurrent retries resolve row by row
+
+When the user clicks `Retry selected`, every selected retry starts immediately.
+The app does not wait for all retries to finish before updating the UI.
 
 ```text
 User selects failed rows
   |
-  v
-Retry selected clicked
-  |
-  +- reducer marks selected IDs as retrying and clears selection
-  |
-  +- retryPayment(id) fired for every selected row immediately
-  |    |
-  |    +- random delay between 1 and 4 seconds
-  |    +- random outcome: 80% Success, 20% Failed
-  |
-  +- each promise dispatches retry/resolved as it settles
+  +- Retry selected
        |
-       +- only that row leaves loading state
-       +- status becomes Success or Failed
+       +- reducer moves selected IDs into retryingIds
+       +- activity says "Retry started for N payments"
+       |
+       +- actions.retryPayment(id) starts for each row
+            |
+            +- row A may finish first
+            +- row B may still be loading
+            +- row C may fail and become selectable again
 ```
 
-The important point is that UI updates are not gated behind `Promise.all`. Each row owns its visible result: `Retry recovered` or `Retry failed`.
+This matches the requirement and gives the user faster feedback.
 
-## 8. Invoice Flow
+### 4. Invoice generation is visible where it happens
+
+Invoice download is row-level work, so the feedback stays in the row:
 
 ```text
-Download clicked on row
+Download invoice
   |
-  +- row enters Generating state
-  |
-  +- wait 2 seconds
-  |
-  +- create a minimal dummy PDF Blob
-  |
-  +- create object URL + hidden anchor click
-  |
-  +- show inline table feedback and clear Generating state
+  +- clicked row shows "Generating"
+  +- activity logs "Generating invoice INV-..."
+  +- mock PDF is created after 2 seconds
+  +- browser download starts
+  +- row shows "Invoice INV-... downloaded"
 ```
 
-The PDF is intentionally dummy content but still uses `application/pdf` and includes invoice/transaction details.
+The activity log also records the event, but the table remains the source of
+truth for the specific row.
 
-## 9. Testing Strategy
+### 5. Theme is applied before React hydrates
 
-| Layer              | Coverage                                                                                |
-| ------------------ | --------------------------------------------------------------------------------------- |
-| Reducer tests      | Failed-only selection, retry start, independent retry resolution, summary totals        |
-| Retry policy tests | 1-4s delay window, 20% failure threshold, fake-timer resolution                         |
-| Invoice tests      | File naming, PDF blob contents, 2-second generation delay                               |
-| Component tests    | Concurrent selected retries, out-of-order row updates, invoice generating/download call |
-| Playwright E2E     | Browser invoice download and real retry flow smoke test                                 |
+The server reads the theme cookie and applies the first `<html>` class. A small
+script in the document head then syncs localStorage and cookie before React
+hydrates.
 
-Commands:
+This avoids a dark-theme refresh briefly showing a light page. The theme toggle
+is click-only; it has no hidden keyboard shortcut or page-wide listener.
+
+## Performance Notes
+
+This project is small, but the async table can still create unnecessary work if
+every row re-renders for every event. The current structure keeps that under
+control:
+
+- `TransactionsDashboard.tsx` is a Server Component shell.
+- `TransactionsDashboardClient.tsx` is the only large interactive boundary.
+- `PaymentHistoryRow` is memoized so stable rows can skip re-rendering.
+- selected, retrying, and invoice-generating IDs are converted to `Set`s for
+  cheap lookup in the table.
+- event handlers are stable where they are passed into memoized children.
+- summary values are derived with `useMemo`.
+- server data retrieval has no artificial delay.
+
+The goal is not premature optimization. The goal is to keep the client boundary
+small and make row updates predictable.
+
+## Testing Strategy
+
+The tests are aimed at the behavior most likely to break during a live coding
+change.
+
+| Layer | What it proves |
+| --- | --- |
+| Reducer tests | selection rules, retry start, retry resolution, reset, summary totals |
+| Retry tests | random delay range, failure threshold, fake-timer behavior |
+| Invoice tests | file names, PDF Blob content, 2-second generation delay |
+| Component tests | injected actions, concurrent retries, row feedback, invoice state |
+| Playwright tests | real browser download, retry flow, theme flash prevention, popover behavior |
+| Static check | files stay small enough to review |
+
+Main commands:
 
 ```bash
+npm run check:file-size
 npm run typecheck
 npm run lint
 npm run test
 npm run test:e2e
 npm run build
-npm audit --omit=dev
+npm run verify
 ```
 
-## 10. Interview-Ready Tradeoffs
+`npm run verify` is the main confidence check. `npm run test:e2e` is separate
+because it opens a browser.
 
-Rejected for the baseline:
+## Tradeoffs
 
-- Route Handlers for fake APIs. They add HTTP ceremony without improving the mock-only assignment.
-- Zustand/Redux/TanStack Query. The app has one screen and reducer-local state is easier to explain.
-- Real PDF generation libraries. The task asks for a mock download; a minimal Blob keeps the dependency graph small.
-- Pagination/filtering. Useful future work, but the core risk is concurrent retry behavior.
+### Why no real backend?
 
-Likely follow-up changes are straightforward:
+The assignment asks for simulated data and simulated APIs. Adding a fake backend
+route for every action would add ceremony without making the retry behavior more
+correct. The injected actions give the same replacement path with less code.
 
-- Change `RETRY_FAILURE_RATE` in `retry-payment.ts`.
-- Change retry timing constants in `retry-payment.ts`.
-- Add new transaction statuses in `types.ts` and the reducer/status badge switch.
-- Move mock boundaries to Route Handlers if a future requirement wants HTTP-level simulation.
+### Why no global state library?
+
+The app has one screen and one workflow. `useReducer` keeps the state local,
+typed, and easy to test. A global store would be more code to explain without a
+real benefit.
+
+### Why no PDF library?
+
+The requirement is a dummy invoice download, not a real invoice renderer. A
+small PDF Blob proves the browser behavior without adding another dependency.
+
+### Why no pagination or filtering?
+
+Those are useful future features, but they are not the hard part of the task.
+The hard part is concurrent retry state and trustworthy async feedback.
+
+## Interview Follow-up Paths
+
+This design leaves clear places to make common follow-up changes:
+
+- Change retry timing in `model/payment/retry-payment.ts`.
+- Change the retry failure rate in `model/payment/retry-payment.ts`.
+- Add a new transaction status in `model/transaction/transaction.ts`.
+- Add a filter bar above `PaymentHistoryTable`.
+- Replace mock actions with calls to Next.js Route Handlers.
+- Replace mock transactions with a server-side data source.
+- Add pagination without touching retry/invoice command logic.
+- Add more activity events in `model/activity/activity-log.ts`.
+
+Each change has a natural home, which is the main reason the project is split
+this way.
+
+## Final Readiness Checklist
+
+Before submission, the project should pass:
+
+- app loads without console errors
+- invoice download starts after the 2-second generating state
+- selected failed payments retry concurrently
+- each row resolves independently
+- dark mode does not flash light on refresh
+- `npm run verify`
+- `npm run test:e2e`
+
+The current design is intentionally modest: it solves the assignment cleanly,
+keeps the code small, and shows how the mock implementation could grow into a
+real billing feature.

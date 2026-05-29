@@ -6,8 +6,8 @@ import {
   getTransactionsSummary,
   transactionsDashboardReducer,
 } from "./dashboard-state"
-import { listMockTransactions } from "./mock-transactions"
-import { TRANSACTION_STATUS } from "./types"
+import { listMockTransactions } from "@/modules/transactions-dashboard/model/transaction/mock-transactions"
+import { TRANSACTION_STATUS } from "@/modules/transactions-dashboard/model/transaction/transaction"
 
 describe("transactionsDashboardReducer", () => {
   it("selects only failed transactions that are not retrying", () => {

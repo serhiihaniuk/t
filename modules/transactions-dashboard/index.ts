@@ -5,6 +5,8 @@ export type {
   RetryPaymentResult,
   Transaction,
   TransactionStatus,
-} from "./model/types"
+} from "./model/transaction/transaction"
 
-export { TRANSACTION_STATUS } from "./model/types"
+export { TRANSACTION_STATUS } from "./model/transaction/transaction"
+export { createMockTransactionsDashboardActions } from "./commands/transactions-dashboard-actions"
+export type { TransactionsDashboardActions } from "./commands/transactions-dashboard-actions"

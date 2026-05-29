@@ -1,4 +1,4 @@
-import { CURRENCY, TRANSACTION_STATUS, type Transaction } from "./types"
+import { CURRENCY, TRANSACTION_STATUS, type Transaction } from "./transaction"
 
 const MOCK_TRANSACTIONS = [
   {

@@ -1,4 +1,4 @@
-import type { CurrencyCode } from "./types"
+import type { CurrencyCode } from "./transaction"
 
 const moneyFormatters = new Map<CurrencyCode, Intl.NumberFormat>()
 
