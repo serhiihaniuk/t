@@ -25,9 +25,11 @@ import {
 import {
   INVOICE_FEEDBACK,
   RETRY_FEEDBACK,
+  ROW_FEEDBACK_VISIBLE_MS,
   type InvoiceFeedback,
   type RetryFeedback,
 } from "./dashboard-feedback"
+import { useTimeout } from "./use-timeout"
 
 const MAX_ACTIVITY_ITEMS = 4
 
@@ -58,6 +60,10 @@ function useTransactionsDashboard({
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false)
   const retryRunIdRef = useRef(0)
   const activitySequenceRef = useRef(0)
+  const {
+    clearAllTimeouts: clearFeedbackTimeouts,
+    scheduleTimeout: scheduleFeedbackTimeout,
+  } = useTimeout()
 
   const retryableSelectedIds = useMemo(
     () => getRetryableSelectedIds(state),
@@ -93,6 +99,36 @@ function useTransactionsDashboard({
     []
   )
 
+  const scheduleRetryFeedbackRemoval = useCallback(
+    (transactionId: string): void => {
+      scheduleFeedbackTimeout(
+        `retry-feedback:${transactionId}`,
+        () => {
+          setRetryFeedbackById((current) =>
+            omitKeys(current, [transactionId])
+          )
+        },
+        ROW_FEEDBACK_VISIBLE_MS
+      )
+    },
+    [scheduleFeedbackTimeout]
+  )
+
+  const scheduleInvoiceFeedbackRemoval = useCallback(
+    (transactionId: string): void => {
+      scheduleFeedbackTimeout(
+        `invoice-feedback:${transactionId}`,
+        () => {
+          setInvoiceFeedbackById((current) =>
+            omitKeys(current, [transactionId])
+          )
+        },
+        ROW_FEEDBACK_VISIBLE_MS
+      )
+    },
+    [scheduleFeedbackTimeout]
+  )
+
   const retryTransaction = useCallback(
     async (transactionId: string, retryRunId: number): Promise<void> => {
       let result: RetryPaymentResult
@@ -117,12 +153,13 @@ function useTransactionsDashboard({
             ? RETRY_FEEDBACK.RECOVERED
             : RETRY_FEEDBACK.STILL_FAILED,
       }))
+      scheduleRetryFeedbackRemoval(transactionId)
       dispatch({ result, type: "retry/resolved" })
       addActivity((activityId) =>
         createRetryResolvedActivity(activityId, result)
       )
     },
-    [actions, addActivity]
+    [actions, addActivity, scheduleRetryFeedbackRemoval]
   )
 
   const handleRetrySelected = useCallback((): void => {
@@ -145,13 +182,14 @@ function useTransactionsDashboard({
 
   const handleReset = useCallback((): void => {
     retryRunIdRef.current += 1
+    clearFeedbackTimeouts()
     dispatch({ transactions: initialTransactions, type: "state/reset" })
     setGeneratingInvoiceIds([])
     setRetryFeedbackById({})
     setInvoiceFeedbackById({})
     setActivities([])
     setIsActivityLogOpen(false)
-  }, [initialTransactions])
+  }, [clearFeedbackTimeouts, initialTransactions])
 
   const handleDownloadInvoice = useCallback(async (
     transaction: Transaction
@@ -172,6 +210,7 @@ function useTransactionsDashboard({
         ...current,
         [transaction.id]: INVOICE_FEEDBACK.DOWNLOADED,
       }))
+      scheduleInvoiceFeedbackRemoval(transaction.id)
       addActivity((activityId) =>
         createInvoiceDownloadedActivity(activityId, transaction.invoiceNumber)
       )
@@ -180,6 +219,7 @@ function useTransactionsDashboard({
         ...current,
         [transaction.id]: INVOICE_FEEDBACK.FAILED,
       }))
+      scheduleInvoiceFeedbackRemoval(transaction.id)
       addActivity((activityId) =>
         createInvoiceFailedActivity(activityId, transaction.invoiceNumber)
       )
@@ -188,7 +228,7 @@ function useTransactionsDashboard({
         current.filter((transactionId) => transactionId !== transaction.id)
       )
     }
-  }, [actions, addActivity])
+  }, [actions, addActivity, scheduleInvoiceFeedbackRemoval])
 
   const toggleSelection = useCallback((transactionId: string) => {
     dispatch({ transactionId, type: "selection/toggled" })

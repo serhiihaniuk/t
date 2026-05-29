@@ -1,3 +1,5 @@
+export const ROW_FEEDBACK_VISIBLE_MS = 5_000
+
 export const RETRY_FEEDBACK = {
   RECOVERED: "recovered",
   STILL_FAILED: "still-failed",

@@ -1,6 +1,13 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react"
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { createMockTransactionsDashboardActions } from "@/modules/transactions-dashboard/commands/transactions-dashboard-actions"
 import { listMockTransactions } from "@/modules/transactions-dashboard/model/transaction/mock-transactions"
@@ -8,6 +15,7 @@ import {
   TRANSACTION_STATUS,
   type RetryPaymentResult,
 } from "@/modules/transactions-dashboard/model/transaction/transaction"
+import { ROW_FEEDBACK_VISIBLE_MS } from "./dashboard-feedback"
 import { TransactionsDashboardClient } from "./TransactionsDashboardClient"
 
 function deferred<T>() {
@@ -23,7 +31,18 @@ function renderDashboard(ui: React.ReactElement) {
   return render(ui)
 }
 
+async function flushAsyncWork(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+}
+
 describe("TransactionsDashboard", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it("retries selected payments concurrently and updates each row as it resolves", async () => {
     const user = userEvent.setup()
     const retryById = new Map<
@@ -142,6 +161,89 @@ describe("TransactionsDashboard", () => {
       2
     )
     expect(downloadButton).toBeEnabled()
+  })
+
+  it("clears retry row feedback after five seconds", async () => {
+    vi.useFakeTimers()
+
+    const retryPaymentAction = vi.fn(async () => ({
+      status: TRANSACTION_STATUS.SUCCESS,
+      transactionId: "TXN-2026-0039",
+    }))
+
+    renderDashboard(
+      <TransactionsDashboardClient
+        initialTransactions={listMockTransactions()}
+        actions={createMockTransactionsDashboardActions({
+          retryPayment: retryPaymentAction,
+        })}
+      />
+    )
+
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: /select failed transaction TXN-2026-0039/i,
+      })
+    )
+    fireEvent.click(screen.getByRole("button", { name: /retry selected/i }))
+    await flushAsyncWork()
+
+    const row = screen.getByRole("row", { name: /TXN-2026-0039/i })
+
+    expect(within(row).getByText("Retry recovered")).toBeInTheDocument()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ROW_FEEDBACK_VISIBLE_MS - 1)
+    })
+
+    expect(within(row).getByText("Retry recovered")).toBeInTheDocument()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+
+    expect(within(row).queryByText("Retry recovered")).not.toBeInTheDocument()
+    expect(within(row).getByText("Success")).toBeInTheDocument()
+  })
+
+  it("clears invoice row feedback after five seconds", async () => {
+    vi.useFakeTimers()
+
+    const blob = new Blob(["pdf"], { type: "application/pdf" })
+    const generateInvoiceAction = vi.fn(async () => blob)
+    const downloadInvoiceAction = vi.fn()
+
+    renderDashboard(
+      <TransactionsDashboardClient
+        initialTransactions={listMockTransactions()}
+        actions={createMockTransactionsDashboardActions({
+          downloadInvoice: downloadInvoiceAction,
+          generateInvoice: generateInvoiceAction,
+        })}
+      />
+    )
+
+    const row = screen.getByRole("row", { name: /TXN-2026-0042/i })
+
+    fireEvent.click(
+      within(row).getByRole("button", {
+        name: /download invoice for TXN-2026-0042/i,
+      })
+    )
+    await flushAsyncWork()
+
+    expect(
+      within(row).getByText("Invoice INV-2026-0042 downloaded")
+    ).toBeInTheDocument()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ROW_FEEDBACK_VISIBLE_MS)
+    })
+
+    expect(
+      within(row).queryByText("Invoice INV-2026-0042 downloaded")
+    ).not.toBeInTheDocument()
+    expect(screen.getByText("Invoice INV-2026-0042 downloaded")).toBeVisible()
   })
 
   it("resets transaction state and row feedback to the original mock data", async () => {
